@@ -3,65 +3,16 @@
 #include <algorithm>
 #include "Engine.h"
 #include "Array.h"
+#include "Objects.h"
+#include "vector.h"
 
 using namespace std;
-
-constexpr double cShipSpeed = 200.f;
-constexpr double cEnemySpeed = 100.f;
-constexpr int cMaxWidthForSprite = (Engine::CanvasWidth - Engine::SpriteSize);
 
 enum class eGameState : uint8_t {
 	InGame,
 	Lost
 };
 
-struct RenderData
-{
-	vec2 position;
-	Engine::Sprite sprite;
-};
-
-namespace Rockets
-{
-	Array positions;
-};
-
-namespace Bombs
-{
-	Array positions;
-};
-
-namespace Player
-{
-	vec2 position;
-	int health = 3;
-};
-
-namespace Aliens
-{
-	Array positions;
-	int nextX = 0;
-	int nextY = 0;
-	bool goRight = true;
-	void AddNew()
-	{
-		if(nextX >= cMaxWidthForSprite - Engine::SpriteSize) {
-			nextX = 0;
-			nextY += Engine::SpriteSize;
-		}
-		positions.push(nextX, nextY);
-		Bombs::positions.push(nextX, nextY);
-		nextX += Engine::SpriteSize;
-		
-	}
-	
-	void CreateArmy()
-	{
-		for(int i = 0; i < 32; ++i) {
-			Aliens::AddNew();
-		}
-	}
-};
 
 inline bool collision(vec2 a, vec2 b)
 {
@@ -70,14 +21,67 @@ inline bool collision(vec2 a, vec2 b)
 	return xAxisCollision && yAxisCollision;
 }
 
+void render(Engine& engine)
+{
+	//static_assert(static_cast<int>(Engine::Sprite::Player) == 0);
+	for(int i = static_cast<int>(Engine::Sprite::Player); i < static_cast<int>(Engine::Sprite::Count); ++i) {
+		for(uint32_t j = 0 ; j < Positions::positions[i].getMaxIdx(); ++j) {
+			vec2 data = Positions::positions[i][j];
+			engine.drawSprite(static_cast<Engine::Sprite>(i), data.x, data.y);
+		}
+	}
+}
+
+void control(Engine::PlayerInput keys, vec2 &position, int intAccum, double &shootTimer, double timestamp)
+{
+	if (keys.left) {
+		position.x -= intAccum;
+		position.x = max(0, position.x);
+	}
+	if (keys.right) {
+		position.x += intAccum;
+		position.x = min(cMaxWidthForSprite, position.x);
+	}
+	if (keys.fire && shootTimer < timestamp) {
+		Rockets::AddNew(vec2(position.x, position.y - (Engine::SpriteSize)));
+		shootTimer = timestamp + 0.5f;
+	}
+}
+
+void update(int intAccum)
+{
+	for(uint32_t i = 0; i < Rockets::rocketArray.getMaxIdx(); ++i) {
+		vec2 position = Rockets::rocketArray[i].getPosition();
+		position.y -= intAccum;
+		Rockets::rocketArray[i].updatePosition(position);
+	}
+	int minAlienX = Engine::CanvasWidth;
+	int maxAlienX = 0;
+	int multiplier = static_cast<int>(Aliens::goRight) * 2 - 1;
+	for(uint32_t i = 0; i < Aliens::alienArray.getMaxIdx(); ++i) {
+		vec2 position = Aliens::alienArray[i].getPosition();
+		position.x += multiplier * intAccum;
+		Aliens::alienArray[i].updatePosition(position);
+		maxAlienX = max(position.x, maxAlienX);
+		minAlienX = min(position.x, minAlienX);
+	}
+	if(maxAlienX >= cMaxWidthForSprite) {
+		Aliens::goRight = false;
+	}
+	if(minAlienX <= 0) {
+		Aliens::goRight = true;
+	}
+	
+}
+
 
 void EngineMain()
 {
 	Engine engine;
 
-	vec2 playerPosition;
-	playerPosition.x = (Engine::CanvasWidth - Engine::SpriteSize) / 2;
-	playerPosition.y = (Engine::CanvasHeight - Engine::SpriteSize); 
+	vec2 start;
+	start.x = (Engine::CanvasWidth - Engine::SpriteSize) / 2;
+	start.y = (Engine::CanvasHeight - Engine::SpriteSize); 
 	
 	double oldTimestamp = engine.getStopwatchElapsedSeconds();
 	
@@ -85,8 +89,8 @@ void EngineMain()
 	double accum = 0.0f;
 
 	Aliens::CreateArmy();
-	uint32_t score = 0;
-	
+	uint32_t id = Positions::get(Engine::Sprite::Player).push(start);
+	vec2 &playerPosition = Positions::get(Engine::Sprite::Player)[id];
 	while (engine.startFrame())
 	{
 		double timestamp = engine.getStopwatchElapsedSeconds();
@@ -96,73 +100,10 @@ void EngineMain()
 		int intAccum = static_cast<int>(accum);
 		oldTimestamp = timestamp;
 		Engine::PlayerInput keys = engine.getPlayerInput();
-		if (keys.left) {
-			playerPosition.x -= intAccum;
-			playerPosition.x = max(0, playerPosition.x);
-		}
-		if (keys.right) {
-			playerPosition.x += intAccum;
-			playerPosition.x = min(cMaxWidthForSprite, playerPosition.x);
-		}
-		
-		if (keys.fire && shootTimer < timestamp) {
-			Rockets::positions.push(playerPosition.x, playerPosition.y - (Engine::SpriteSize));
-			shootTimer = timestamp + 0.5f;
-		}
-		
-		//group up all the draw calls
-		engine.drawSprite(
-			Engine::Sprite::Player, 
-			(playerPosition.x), (playerPosition.y));
-			
-		int maxAlienX = 0;
-		int minAlienX = Engine::CanvasWidth;
-		for(uint32_t i = 0; i < Aliens::positions.getMaxIdx(); ++i) {
-			// double for loop is not too bad since both of these should fit in a cache line
-			for(uint32_t j = 0; j < Rockets::positions.getMaxIdx(); ++j) {
-				if(collision(Aliens::positions[i], Rockets::positions[j])) {
-					Aliens::positions.erase(i);
-					Rockets::positions.erase(j);
-					score++;
-					break;
-				}
-			}
-			
-			//convert 0,1 to -1, 1
-			int multiplier = static_cast<int>(Aliens::goRight) * 2 - 1;
-			Aliens::positions[i].x += intAccum * multiplier;
-			
-			maxAlienX = max(Aliens::positions[i].x, maxAlienX);
-			minAlienX = min(Aliens::positions[i].x, minAlienX);
-			engine.drawSprite(
-				Engine::Sprite::Enemy1, 
-				(Aliens::positions[i].x), (Aliens::positions[i].y));
-		}
-		for(uint32_t i = 0; i < Rockets::positions.getMaxIdx(); ++i) {
-			if(Rockets::positions[i].y < 0.f) {
-				Rockets::positions.erase(i);
-			}
-			Rockets::positions[i].y -= intAccum;
-			engine.drawSprite(
-				Engine::Sprite::Rocket, 
-				(Rockets::positions[i].x), (Rockets::positions[i].y));
-		}
-		for(uint32_t i = 0; i < Bombs::positions.getMaxIdx(); ++i) {
-			if(Bombs::positions[i].y > Engine::CanvasHeight) {
-				Bombs::positions.erase(i);
-			}
-			Bombs::positions[i].y += intAccum;
-			engine.drawSprite(
-				Engine::Sprite::Bomb, 
-				(Bombs::positions[i].x), (Bombs::positions[i].y));			
-		}
-		if(maxAlienX >= cMaxWidthForSprite) {
-			Aliens::goRight = false;
-		}
-		if(minAlienX <= 0) {
-			Aliens::goRight = true;
-		}
-		
+
+		control(keys, playerPosition, intAccum, shootTimer, timestamp);
+		render(engine);
+		update(intAccum);
 
 		const char message[] = "Current Score:";
 		engine.drawText(
