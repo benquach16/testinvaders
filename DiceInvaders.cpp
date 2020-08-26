@@ -5,6 +5,7 @@
 #include "Engine.h"
 #include "Array.h"
 #include "Objects.h"
+#include "Render.h"
 #include "vector.h"
 
 using namespace std;
@@ -21,52 +22,7 @@ inline bool collision(vec2 a, vec2 b)
 	return xAxisCollision && yAxisCollision;
 }
 
-char text1[16]="Current Score:";
-char text2[16]="Current Lives:";
-char score[128];
-char lives[128];
-
-void renderUI(Engine& engine)
-{
-	constexpr uint16_t text2len = 18;
-	sprintf_s(score, 128, "%s%d", text1,player.score);
-	engine.drawText(
-		score, 
-		0, 
-		0);
-	sprintf_s(lives, 128, "%s%d", text2,player.health);
-	engine.drawText(
-		lives, 
-		(Engine::CanvasWidth - (text2len) * Engine::FontWidth), 
-		0);
-}
-
-char text3[32] = "You lost! Final score: ";
-char death[128];
-void renderDeath(Engine& engine)
-{
-	constexpr uint16_t text3len = 24;
-	sprintf_s(death, 128, "%s%d", text3,player.score);
-	engine.drawText(
-		death, 
-		(Engine::CanvasWidth - (text3len) * Engine::FontWidth)/2, 
-		Engine::CanvasHeight/2);	
-}
-
-void render(Engine& engine)
-{
-	//static_assert(static_cast<int>(Engine::Sprite::Player) == 0);
-	for(int i = static_cast<int>(Engine::Sprite::Player); i < static_cast<int>(Engine::Sprite::Count); ++i) {
-		for(uint32_t j = 0; j < RenderQueue::positions[i].getMaxIdx(); ++j) {
-			vec2 data = RenderQueue::positions[i][j];
-			engine.drawSprite(static_cast<Engine::Sprite>(i), data.x, data.y);
-		}
-		RenderQueue::positions[i].clear();
-	}
-	renderUI(engine);
-}
-
-void control(Engine::PlayerInput keys, vec2 &position, double &shootTimer, double timestamp)
+inline void Control(Engine::PlayerInput keys, vec2 &position, double &shootTimer, double timestamp)
 {
 	if (keys.left) {
 		position.x -= static_cast<int>(player.accum);
@@ -82,11 +38,17 @@ void control(Engine::PlayerInput keys, vec2 &position, double &shootTimer, doubl
 	}
 }
 
-void update(double deltaTime, double &bombTimer, double timestamp)
+void AccumDelta(double deltaTime)
 {
-	int delta;
 	rockets.AccumDelta(deltaTime);
-	delta = static_cast<int>(rockets.accum);
+	aliens.AccumDelta(deltaTime);
+	bombs.AccumDelta(deltaTime);
+	player.AccumDelta(deltaTime);
+}
+
+void UpdateProjectiles()
+{
+	int delta = static_cast<int>(rockets.accum);
 	for(uint32_t i = 0; i <rockets.array.getMaxIdx(); ++i) {
 		vec2 position = rockets.array[i].position;
 		if (position.y < 0.f) {
@@ -97,12 +59,31 @@ void update(double deltaTime, double &bombTimer, double timestamp)
 		rockets.array[i].position=position;
 		RenderQueue::Add(rockets.array[i].sprite, position);
 	}
-	
+	delta = static_cast<int>(bombs.accum);
+	for(uint32_t i = 0; i < bombs.array.getMaxIdx(); ++i) {
+		vec2 position = bombs.array[i].position;
+		if (position.y > Engine::CanvasHeight) {
+			bombs.Destroy(i);
+			position = bombs.array[i].position;
+		}
+		if(collision(player.position, position)) {
+			bombs.Destroy(i);
+			player.health--;
+			position = bombs.array[i].position;
+		}
+		position.y += delta;
+		bombs.array[i].position = position;
+		
+		RenderQueue::Add(bombs.array[i].sprite, position);
+	}
+}
+
+void Update(double &bombTimer, double timestamp)
+{
 	int minAlienX = Engine::CanvasWidth;
 	int maxAlienX = 0;
 	int multiplier = static_cast<int>(aliens.goRight) * 2 - 1;
-	aliens.AccumDelta(deltaTime);
-	delta = static_cast<int>(aliens.accum);
+	int delta = static_cast<int>(aliens.accum);
 	for(uint32_t i = 0; i < aliens.array.getMaxIdx(); ++i) {
 		vec2 position = aliens.array[i].position;
 		for(uint32_t j = 0; j < rockets.array.getMaxIdx(); ++j) {
@@ -143,28 +124,10 @@ void update(double deltaTime, double &bombTimer, double timestamp)
 		aliens.goRight = true;
 		aliens.flipped = false;
 	}
-	
-	bombs.AccumDelta(deltaTime);
-	delta = static_cast<int>(bombs.accum);
-	for(uint32_t i = 0; i < bombs.array.getMaxIdx(); ++i) {
-		vec2 position = bombs.array[i].position;
-		if (position.y > Engine::CanvasHeight) {
-			bombs.Destroy(i);
-			position = bombs.array[i].position;
-		}
-		if(collision(player.position, position)) {
-			bombs.Destroy(i);
-			player.health--;
-			position = bombs.array[i].position;
-		}
-		position.y += delta;
-		bombs.array[i].position = position;
-		
-		RenderQueue::Add(bombs.array[i].sprite, position);
-	}
+	UpdateProjectiles();
 }
 
-void initializeGame()
+inline void InitializeGame()
 {
 	aliens.array.clear();
 	rockets.array.clear();
@@ -182,7 +145,7 @@ void EngineMain()
 	double shootTimer = 0.0f;
 	double bombTimer = 0.0f;
 
-	initializeGame();
+	InitializeGame();
 	eGameState currentState = eGameState::InGame;
 	while (engine.startFrame())
 	{
@@ -190,26 +153,27 @@ void EngineMain()
 		double deltaTime = timestamp - oldTimestamp;
 		oldTimestamp = timestamp;
 		Engine::PlayerInput keys = engine.getPlayerInput();		
-		render(engine);
+		RenderQueue::Render(engine);
+		RenderQueue::RenderUI(engine, player.score, player.health);
+		
 		switch(currentState) {
 			case eGameState::InGame:
-			player.AccumDelta(deltaTime);
-			control(keys, player.position, shootTimer, timestamp);
+			AccumDelta(deltaTime);
+			Control(keys, player.position, shootTimer, timestamp);
 			RenderQueue::Add(Engine::Sprite::Player, player.position);
-			update(deltaTime, bombTimer, timestamp);
+			Update(bombTimer, timestamp);
 			if(player.health <= 0) {
 				currentState = eGameState::Lost;
 			}
 
 			break;
 			case eGameState::Lost:
-			renderDeath(engine);
+			RenderQueue::RenderDeath(engine, player.score);
 			if(keys.fire) {
-				initializeGame();
+				InitializeGame();
 				currentState = eGameState::InGame;
 			}
 			break;
-			
 		}
 	}
 }

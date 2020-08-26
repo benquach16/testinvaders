@@ -2,30 +2,12 @@
 
 #include "Engine.h"
 #include "vector.h"
+#include "Render.h"
 
 constexpr double cShipSpeed = 200.f;
 constexpr double cEnemySpeed = 100.f;
 constexpr double cShootInterval = 0.5f;
 constexpr int cMaxWidthForSprite = (Engine::CanvasWidth - Engine::SpriteSize);
-
-namespace RenderQueue
-{
-	//batched similar sprites together
-	Array<vec2> positions[static_cast<int>(Engine::Sprite::Count)];
-	Array<vec2>& get(Engine::Sprite idx) {
-		return positions[static_cast<int>(idx)];
-	}	
-	void Add(Engine::Sprite sprite, vec2 position) {
-		positions[static_cast<int>(sprite)].push(position);
-	}
-};
-
-struct Renderable
-{
-	vec2 position;
-	Engine::Sprite sprite;
-	Renderable(vec2 _position = vec2(), Engine::Sprite _sprite = Engine::Sprite::Player) : position(_position), sprite(_sprite) {}
-};
 
 struct Entities
 {
@@ -104,7 +86,6 @@ struct Bombs : public Entities
 		array.push(Renderable(position, Engine::Sprite::Bomb));
 	}
 } bombs;
-
 
 struct Player
 {

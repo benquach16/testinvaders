@@ -2,26 +2,25 @@
 
 #include <algorithm>
 
-//important to have arrays that are not fragmented
+// Array class that enforces contiguous memory, but is not stable
+// Do not store indices from this class
 template<class T>
 class Array {
 	public:
-	uint32_t push(T item)
+	void push(T item)
 	{
-		//we will segfault immediately if maxIdx is greater than cMaxArray
-		//game design must assure that more than 128 objects is impossible.
+		// we will segfault immediately if maxIdx is greater than cMaxArray
+		// game design must assure that more than cMaxArray objects is impossible.
 		#if defined(DEBUG)
 		assert(maxIdx < cMaxArray);
 		#endif
 		data[maxIdx] = item;
-		uint32_t idx = maxIdx;
 		maxIdx++;
-		return idx;
 	}
 	
 	// this just swaps with the back end and decrements
 	// so it is important to keep that in mind during the for loop
-	uint32_t erase(uint32_t idx)
+	void erase(uint32_t idx)
 	{
 		#if defined(DEBUG)
 		assert(idx >= 0 && idx < cMaxArray);
@@ -29,7 +28,6 @@ class Array {
 		#endif
 		maxIdx--;
 		std::swap(data[idx], data[maxIdx]);
-		return idx;
 	}
 	
 	void clear()
@@ -57,5 +55,5 @@ class Array {
 	private:
 	static constexpr uint32_t cMaxArray = 128;
 	T data[cMaxArray];
-	uint32_t maxIdx;
+	uint32_t maxIdx = 0;
 };
