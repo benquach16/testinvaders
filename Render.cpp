@@ -1,30 +1,33 @@
 #include "Render.h"
 
+constexpr uint16_t bufSize = 128;
 const char text1[16] = "Current Score:";
 const char text2[16] = "Current Lives:";
 const char text3[32] = "You lost! Final score: ";
-char deathMsg[128];
-char scoreMsg[128];
-char livesMsg[128];
+char deathMsg[bufSize];
+char scoreMsg[bufSize];
+char livesMsg[bufSize];
 
 namespace RenderQueue
 {
 	Array<vec2> positions[static_cast<int>(Engine::Sprite::Count)];
 	Array<vec2>& get(Engine::Sprite idx) {
 		return positions[static_cast<int>(idx)];
-	}	
-	void Add(Engine::Sprite sprite, vec2 position) {
-		positions[static_cast<int>(sprite)].push(position);
 	}
+	
+	void Add(Renderable data) {
+		positions[static_cast<int>(data.sprite)].push(data.position);
+	}
+	
 	void RenderUI(Engine& engine, int score, int health)
 	{
-		constexpr uint16_t text2len = 18;
-		sprintf_s(scoreMsg, 128, "%s%d", text1,score);
+		constexpr uint16_t text2len = 16 + 2; // 2 digits for extra lives
+		sprintf_s(scoreMsg, bufSize, "%s%d", text1,score);
 		engine.drawText(
 			scoreMsg, 
 			0, 
 			0);
-		sprintf_s(livesMsg, 128, "%s%d", text2,health);
+		sprintf_s(livesMsg, bufSize, "%s%d", text2,health);
 		engine.drawText(
 			livesMsg, 
 			(Engine::CanvasWidth - (text2len) * Engine::FontWidth), 
@@ -33,8 +36,8 @@ namespace RenderQueue
 
 	void RenderDeath(Engine& engine, int score)
 	{
-		constexpr uint16_t text3len = 24;
-		sprintf_s(deathMsg, 128, "%s%d", text3,score);
+		constexpr uint16_t text3len = 22 + 4; // 4 digits for score
+		sprintf_s(deathMsg, bufSize, "%s%d", text3,score);
 		engine.drawText(
 			deathMsg, 
 			(Engine::CanvasWidth - (text3len) * Engine::FontWidth)/2, 
@@ -44,6 +47,7 @@ namespace RenderQueue
 	void Render(Engine& engine)
 	{
 		//static_assert(static_cast<int>(Engine::Sprite::Player) == 0);
+		//#pragma unroll
 		for(int i = static_cast<int>(Engine::Sprite::Player); i < static_cast<int>(Engine::Sprite::Count); ++i) {
 			for(uint32_t j = 0; j < RenderQueue::positions[i].getMaxIdx(); ++j) {
 				vec2 data = RenderQueue::positions[i][j];

@@ -57,7 +57,7 @@ void UpdateProjectiles()
 		}
 		position.y -= delta;
 		rockets.array[i].position=position;
-		RenderQueue::Add(rockets.array[i].sprite, position);
+		RenderQueue::Add(rockets.array[i]);
 	}
 	delta = static_cast<int>(bombs.accum);
 	for(uint32_t i = 0; i < bombs.array.getMaxIdx(); ++i) {
@@ -66,7 +66,7 @@ void UpdateProjectiles()
 			bombs.Destroy(i);
 			position = bombs.array[i].position;
 		}
-		if(collision(player.position, position)) {
+		if(collision(player.render.position, position)) {
 			bombs.Destroy(i);
 			player.health--;
 			position = bombs.array[i].position;
@@ -74,7 +74,7 @@ void UpdateProjectiles()
 		position.y += delta;
 		bombs.array[i].position = position;
 		
-		RenderQueue::Add(bombs.array[i].sprite, position);
+		RenderQueue::Add(bombs.array[i]);
 	}
 }
 
@@ -95,18 +95,27 @@ void Update(double &bombTimer, double timestamp)
 				player.score++;
 			}
 		}
+		if(collision(player.render.position, position)) {
+			aliens.Destroy(i);
+			player.health--;
+			position = aliens.array[i].position;
+		}
+		if (position.y > Engine::CanvasHeight) {
+			aliens.Destroy(i);
+			position = aliens.array[i].position;
+		}
 		position.x += multiplier * delta;
 		position.y += Engine::SpriteSize * static_cast<int>(aliens.goDown);
 		aliens.array[i].position=position;
 		maxAlienX = max(position.x, maxAlienX);
 		minAlienX = min(position.x, minAlienX);
 		
-		if(bombTimer < timestamp && (rand()%20 < 2)) {
+		constexpr int cShootChance = 10;
+		if(bombTimer < timestamp && (rand()%cShootChance < 1)) {
 			bombs.AddNew(position);
 			bombTimer=timestamp + cShootInterval;
 		}
-		
-		RenderQueue::Add(aliens.array[i].sprite, position);
+		RenderQueue::Add(aliens.array[i]);
 	}
 	if(aliens.array.getMaxIdx() == 0) {
 		aliens.CreateArmy();
@@ -116,9 +125,8 @@ void Update(double &bombTimer, double timestamp)
 		aliens.goRight = false;
 		if(aliens.flipped == false) {
 			aliens.goDown = true;
-			aliens.flipped=true;
+			aliens.flipped = true;
 		}
-		
 	}
 	if(minAlienX <= 0) {
 		aliens.goRight = true;
@@ -157,17 +165,17 @@ void EngineMain()
 		RenderQueue::RenderUI(engine, player.score, player.health);
 		
 		switch(currentState) {
-			case eGameState::InGame:
+		case eGameState::InGame:
 			AccumDelta(deltaTime);
-			Control(keys, player.position, shootTimer, timestamp);
-			RenderQueue::Add(Engine::Sprite::Player, player.position);
+			Control(keys, player.render.position, shootTimer, timestamp);
+			RenderQueue::Add(player.render);
 			Update(bombTimer, timestamp);
 			if(player.health <= 0) {
 				currentState = eGameState::Lost;
 			}
 
 			break;
-			case eGameState::Lost:
+		case eGameState::Lost:
 			RenderQueue::RenderDeath(engine, player.score);
 			if(keys.fire) {
 				InitializeGame();

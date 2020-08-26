@@ -13,16 +13,16 @@ struct Renderable
 
 namespace RenderQueue
 {
-	//batched similar sprites together
+	// queue organized by type of sprite
 	extern Array<vec2> positions[static_cast<int>(Engine::Sprite::Count)];
 	
 	Array<vec2>& get(Engine::Sprite idx);
 	
-	void Add(Engine::Sprite sprite, vec2 position);
+	void Add(Renderable data);
 
 	void RenderUI(Engine& engine, int score, int health);
 
 	void RenderDeath(Engine& engine, int score);
 
 	void Render(Engine& engine);
-};
+}; // RenderQueue

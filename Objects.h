@@ -12,6 +12,7 @@ constexpr int cMaxWidthForSprite = (Engine::CanvasWidth - Engine::SpriteSize);
 struct Entities
 {
 	Array<Renderable> array;
+	// used to store frame independent increments to avoid multiple casts
 	double accum = 0.f;
 	double speed = cShipSpeed;
 	void AccumDelta(double deltaTime) {
@@ -30,19 +31,24 @@ struct Entities
 
 struct Aliens : public Entities
 {
+	// store coordinates of next enemy to create
 	int nextX;
 	int nextY;
+	
+	// state to determine movement of enemies
 	bool goRight = true;
 	bool goDown = false;
 	bool flipped = false;
+	
+	// state to change sprite
 	bool altSprite = false;
 	Aliens() {
 		speed = cEnemySpeed;
 		Reset();
 	}
-	void AddNew()
-	{
-		if(nextX >= cMaxWidthForSprite - (Engine::SpriteSize*8)) {
+	void AddNew() {
+		constexpr int cPad = 8;
+		if(nextX >= cMaxWidthForSprite - (Engine::SpriteSize*cPad)) {
 			nextX = 0;
 			nextY += Engine::SpriteSize;
 			altSprite = !altSprite;
@@ -52,19 +58,16 @@ struct Aliens : public Entities
 			sprite = Engine::Sprite::Enemy2;
 		} 
 		
-		//in place
 		array.push(Renderable(vec2(nextX, nextY), sprite));
 		nextX += Engine::SpriteSize;
 	}
 	
-	void Reset()
-	{
+	void Reset() {
 		nextX = 0;
 		nextY = Engine::SpriteSize;
 	}
 	
-	void CreateArmy()
-	{
+	void CreateArmy() {
 		Reset();
 		for(int i = 0; i < 32; ++i) {
 			Aliens::AddNew();
@@ -90,7 +93,7 @@ struct Bombs : public Entities
 struct Player
 {
 	double accum = 0.f;
-	vec2 position;
+	Renderable render;
 	void AccumDelta(double deltaTime) {
 		if(accum > 1.f) {
 			accum = 0;
@@ -103,8 +106,12 @@ struct Player
 	{
 		health = 3;
 		score = 0;
-		position.x = (Engine::CanvasWidth - Engine::SpriteSize) / 2;
-		position.y = (Engine::CanvasHeight - Engine::SpriteSize); 
+		render.position.x = (Engine::CanvasWidth - Engine::SpriteSize) / 2;
+		render.position.y = (Engine::CanvasHeight - Engine::SpriteSize); 
+	}
+	Player() {
+		render.sprite = Engine::Sprite::Player;
+		Reset();	
 	}
 } player;
 
