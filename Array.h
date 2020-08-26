@@ -21,22 +21,35 @@ class Array {
 	
 	// this just swaps with the back end and decrements
 	// so it is important to keep that in mind during the for loop
-	void erase(uint32_t idx)
+	uint32_t erase(uint32_t idx)
 	{
 		#if defined(DEBUG)
 		assert(idx >= 0 && idx < cMaxArray);
+		assert(maxIdx>0);
 		#endif
 		maxIdx--;
 		std::swap(data[idx], data[maxIdx]);
+		return idx;
+	}
+	
+	void clear()
+	{
+		maxIdx = 0;
 	}
 	
 	T& operator[](uint32_t idx)
 	{
+		#if defined(DEBUG)
+		assert(idx >= 0 && idx < cMaxArray);
+		#endif	
 		return data[idx];
 	}
 
 	T operator[](uint32_t idx) const
 	{
+		#if defined(DEBUG)
+		assert(idx >= 0 && idx < cMaxArray);
+		#endif
 		return data[idx];
 	}
 	
